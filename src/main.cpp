@@ -65,14 +65,16 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
   return result;
 }
 
+
+
 int main() {
   uWS::Hub h;
 
   // MPC is initialized here!
   MPC mpc;
-
   h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
+      
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -104,11 +106,11 @@ int main() {
             vector<double> waypoints_x;
             vector<double> waypoints_y;
             
-            const auto cosa = cos(psi);
-            const auto sina = sin(psi);
-            
             Eigen::VectorXd x (ptsx.size());
             Eigen::VectorXd y (ptsy.size());
+            
+            const auto cosa = cos(psi);
+            const auto sina = sin(psi);
             
             for (int i = 0; i < ptsx.size(); i++) {
                 double dx = ptsx[i] - px;
@@ -128,43 +130,28 @@ int main() {
 //            Eigen::Map<Eigen::VectorXd> waypoints_y_eig(ptry, 6);
             
             auto coeffs = polyfit(x, y, 3);
-            double cte = polyeval(coeffs, 0); // From car position (px = 0, py = 0)
-            double epsi = -atan(coeffs[1]); // psi = 0
+            double cte = -coeffs[0]; // polyeval(coeffs, 0); // From car position (px = 0, py = 0)
+            double epsi = atan(-coeffs[1]); // psi = 0
             
             Eigen::VectorXd state(6);
             state << 0, 0, 0, v, cte, epsi;
             auto vars = mpc.Solve(state, coeffs);
-            steer_value = -mpc.steeringValue() / deg2rad(25);
-            throttle_value = mpc.throttleValue();
+            
             
             
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
-            std::cout << "Steering value: " << steer_value << std::endl;
+//            std::cout << "Steering value: " << steer_value << std::endl;
+            
+            steer_value = -mpc.steeringValue() / deg2rad(25);
+            throttle_value = mpc.throttleValue();
           msgJson["steering_angle"] = steer_value;
           msgJson["throttle"] = throttle_value;
 
           //Display the MPC predicted trajectory 
-          vector<double> mpc_x_vals;
-          vector<double> mpc_y_vals;
-
-          //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
-          // the points in the simulator are connected by a Green line
-            
-//            for (int i = 2; i < vars.size(); i ++) {
-//                if (i%2 == 0) {
-//                    mpc_x_vals.push_back(vars[i]);
-//                }
-//                else {
-//                    mpc_y_vals.push_back(vars[i]);
-//                }
-//            }
-//
-//          msgJson["mpc_x"] = mpc_x_vals;
-//          msgJson["mpc_y"] = mpc_y_vals;
-            
+      
             msgJson["mpc_x"] = mpc.path_x;
             msgJson["mpc_y"] = mpc.path_y;
             
@@ -175,7 +162,7 @@ int main() {
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
             
-            for (double i = 0; i < 100; i += 3){
+            for (double i = 1; i < 50; i += 5){
                 next_x_vals.push_back(i);
                 next_y_vals.push_back(polyeval(coeffs, i));
             }
@@ -201,6 +188,7 @@ int main() {
           // SUBMITTING.
           this_thread::sleep_for(chrono::milliseconds(100));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+            
         }
       } else {
         // Manual driving
