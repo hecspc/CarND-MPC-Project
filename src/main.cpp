@@ -77,7 +77,7 @@ int main() {
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
     string sdata = string(data).substr(0, length);
-    cout << sdata << endl;
+//    cout << sdata << endl;
     if (sdata.size() > 2 && sdata[0] == '4' && sdata[1] == '2') {
       string s = hasData(sdata);
       if (s != "") {
@@ -100,10 +100,49 @@ int main() {
           */
           double steer_value;
           double throttle_value;
+            
+            vector<double> waypoints_x;
+            vector<double> waypoints_y;
+            
+            const auto cosa = cos(psi);
+            const auto sina = sin(psi);
+            
+            Eigen::VectorXd x (ptsx.size());
+            Eigen::VectorXd y (ptsy.size());
+            
+            for (int i = 0; i < ptsx.size(); i++) {
+                double dx = ptsx[i] - px;
+                double dy = ptsy[i] - py;
+                double local_x = dx * cosa + dy * sina;
+                double local_y = -dx * sina + dy * cosa;
+                waypoints_x.push_back(local_x);
+                waypoints_y.push_back(local_y);
+                x(i) = local_x;
+                y(i) = local_y;
+            }
+//            // Convert to VectorXd
+//            // https://forum.kde.org/viewtopic.php?f=74&t=94839
+//            double* ptrx = &waypoints_x[0];
+//            double* ptry = &waypoints_y[0];
+//            Eigen::Map<Eigen::VectorXd> waypoints_x_eig(ptrx, 6);
+//            Eigen::Map<Eigen::VectorXd> waypoints_y_eig(ptry, 6);
+            
+            auto coeffs = polyfit(x, y, 3);
+            double cte = polyeval(coeffs, 0); // From car position (px = 0, py = 0)
+            double epsi = -atan(coeffs[1]); // psi = 0
+            
+            Eigen::VectorXd state(6);
+            state << 0, 0, 0, v, cte, epsi;
+            auto vars = mpc.Solve(state, coeffs);
+            steer_value = -mpc.steeringValue() / deg2rad(25);
+            throttle_value = mpc.throttleValue();
+            
+            
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
+            std::cout << "Steering value: " << steer_value << std::endl;
           msgJson["steering_angle"] = steer_value;
           msgJson["throttle"] = throttle_value;
 
@@ -113,23 +152,44 @@ int main() {
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
-
-          msgJson["mpc_x"] = mpc_x_vals;
-          msgJson["mpc_y"] = mpc_y_vals;
-
+            
+//            for (int i = 2; i < vars.size(); i ++) {
+//                if (i%2 == 0) {
+//                    mpc_x_vals.push_back(vars[i]);
+//                }
+//                else {
+//                    mpc_y_vals.push_back(vars[i]);
+//                }
+//            }
+//
+//          msgJson["mpc_x"] = mpc_x_vals;
+//          msgJson["mpc_y"] = mpc_y_vals;
+            
+            msgJson["mpc_x"] = mpc.path_x;
+            msgJson["mpc_y"] = mpc.path_y;
+            
           //Display the waypoints/reference line
           vector<double> next_x_vals;
           vector<double> next_y_vals;
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
+            
+            for (double i = 0; i < 100; i += 3){
+                next_x_vals.push_back(i);
+                next_y_vals.push_back(polyeval(coeffs, i));
+            }
 
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
+            
+//            msgJson["next_x"] = waypoints_x;
+//            msgJson["next_y"] = waypoints_y;
+            
 
 
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
+//          std::cout << msg << std::endl;
           // Latency
           // The purpose is to mimic real driving conditions where
           // the car does actuate the commands instantly.

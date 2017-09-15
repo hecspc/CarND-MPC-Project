@@ -6,15 +6,28 @@
 
 using namespace std;
 
+// For converting back and forth between radians and degrees.
+
 class MPC {
+    static constexpr double max_delta = 25 * M_PI / 180.0;
+    
  public:
-  MPC();
+    MPC();
 
-  virtual ~MPC();
+    virtual ~MPC();
 
-  // Solve the model given an initial state and polynomial coefficients.
-  // Return the first actuatotions.
-  vector<double> Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs);
+    // Solve the model given an initial state and polynomial coefficients.
+    // Return the first actuatotions.
+    vector<double> Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs);
+    double steeringValue() const { return steering_delta_; }
+    double throttleValue() const { return a_; }
+    
+    std::vector<double> path_x;
+    std::vector<double> path_y;
+    
+  private:
+    double steering_delta_;
+    double a_;
 };
 
 #endif /* MPC_H */
