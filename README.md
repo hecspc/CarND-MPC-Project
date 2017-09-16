@@ -3,6 +3,72 @@ Self-Driving Car Engineer Nanodegree Program
 
 ---
 
+## Intro
+This is the solution for the the MPC Project from the term 2 from the Udacity SDCND. The goal is to drive for at least a whole lap in the Udacity simulator, given the telemetry (position, velocity and steering) and the track waypoints. The solution should work with at least 100ms of latency.
+
+To achieve the goal, I make use of the IPOPT and CPPAD to calculate the trajectory and the actuator values as discussed in the class.
+
+## The model
+The kinematic model is given by the the vector state `[x, y, psi, v, cte, epsi]` where `x` and `y` are the position coordinates of the vehicle, `psi` is the steering angle, `v` is the velocity, `cte` is the cross track error  and `epsi` is the psi error.
+
+This values depend on time according to the values of the next actuators `delta` which is the change in the steering angle and `a` which is the accceleration.
+
+These values are calculated for the current timestep with the next equations:
+
+```
+      x_[t+1] = x[t] + v[t] * cos(psi[t]) * dt
+      y_[t+1] = y[t] + v[t] * sin(psi[t]) * dt
+      psi_[t+1] = psi[t] + v[t] / Lf * delta[t] * dt
+      v_[t+1] = v[t] + a[t] * dt
+      cte[t+1] = f(x[t]) - y[t] + v[t] * sin(epsi[t]) * dt
+      epsi[t+1] = psi[t] - psides[t] + v[t] * delta[t] / Lf * dt
+```
+
+as we mentioned, where `(x,y)` is position of the vehicle; `psi` is orientation of the vehicle; `v` is velocity; `delta` and `a` are actuators like steering angle and aceleration (throttle/brake combined); `Lf` measures the distance between the front of the vehicle and its center of gravity (the larger the vehicle, the slower the turn rate); `cte` is  cross-track error (the difference between the line and the current vehicle position y in the coordinate space of the vehicle); `epsi` is the orientation error. The vehicle model is implemented in the `FG_eval` class.
+
+
+## Timestep Length and Elapsed Duration (N & dt)
+
+The values chosen for `N` and `dt` are 10 and 0.05, respectively. This means that I am considering horizon of a duration for half a second. I got these values with trial and error method, where greater values produced more erratic behaviors.
+
+
+## Polynomial Fitting and MPC Preprocessing
+The waypoints are preprocessed by transforming them to the vehicle's reference frame. This simplifies the process to fit a polynomial to the waypoints because the vehicle's x and y coordinates are now at the origin (0, 0) and the orientation angle is also zero.
+
+In the simulator the yellow line that is shown is the polynomial result instead of the waypoints.
+
+
+## Model Predictive Control with Latency
+
+In the model, we have a 100 millisecond latency which simulates the latency betweeen sensors and processing.
+
+In the real scenario, there is a latency between the sensors and processing. We can simulated this latency just delaying the message for a given time, in our case, 100 milliseconds.
+
+To handle this latency we add two constraints for the optimization problem, one for the steering angle and another for the throttle (acceleration) so the value is not changed during the latency steps. We can calculate the number of steps given the latencty (0.1 seconds) and the elapsed duration (0.05 seconds)
+
+```
+latency_steps = latency / dt + 1 = 0.1 / 0.05 + 1 = 3
+```
+
+so we add the contraints to the optimization problem:
+
+
+
+	for (int i = delta_start; i < delta_start + latency_index; i++) {
+		vars_lowerbound[i] = steering_delta_;
+		vars_upperbound[i] = steering_delta_;
+	}
+      // Acceleration/deceleration is not changed during latency 
+	for (int i = a_start; i < a_start + latency_index; i++) {
+		vars_lowerbound[i] = a_;
+		vars_upperbound[i] = a_;
+	}      
+where `steering_delta_` and `a_` are the actuators to handle the actuators for transition between t-1 and t+0 states. 
+
+To handle the actuators after latency, the actuator commands as the transition between t+2 and t+3 states are used. 
+
+
+
 ## Dependencies
 
 * cmake >= 3.5
